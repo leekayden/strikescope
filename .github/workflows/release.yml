@@ -1,0 +1,53 @@
+name: Release
+
+# Tagging a version (v0.0.2, ...) builds the fat jar and publishes the GitHub
+# release that installed copies of the app silently auto-update from.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Check version matches tag
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          grep -q "\"$VER\"" src/AppVersion.java || {
+            echo "Tag is v$VER but src/AppVersion.java does not contain \"$VER\"."
+            echo "Bump AppVersion.VERSION, commit, then re-tag."
+            exit 1
+          }
+
+      - name: Build fat jar
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          mkdir -p out staging dist
+          javac -encoding UTF-8 -cp lib/flatlaf.jar -d out src/*.java
+          (cd staging && unzip -q ../lib/flatlaf.jar && rm -f META-INF/MANIFEST.MF module-info.class)
+          jar --create --file "dist/StrikeScope-$VER.jar" \
+              --main-class StrikeScopeApp -C out . -C staging .
+
+      - name: Headless self-test
+        run: java -jar dist/StrikeScope-*.jar --selftest
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/StrikeScope-*.jar
+          generate_release_notes: true
+          body: |
+            **Install:** double-click `StrikeScope-*.jar` (needs Java 17 or newer,
+            e.g. [Eclipse Temurin](https://adoptium.net)). No installer.
+            Already-installed copies detect this release in the background and
+            update themselves silently.

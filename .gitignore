@@ -1,0 +1,10 @@
+# build + runtime artifacts
+out/
+staging/
+dist/
+updates/
+*.class
+*.log
+
+# local tooling venv (not part of the app)
+.venv/
